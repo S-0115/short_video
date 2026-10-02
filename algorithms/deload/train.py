@@ -35,7 +35,7 @@ parser.add_argument('--chunklength', type=float, default=2000., help='')
 
 args = parser.parse_args()
 
-# QoE arguments
+# QoE 参数
 from config_algorithm import VIDEO_BIT_RATE
 from config_algorithm import alpha, beta, gamma, theta, watch_time_threhold, Bmax
 
@@ -43,7 +43,7 @@ ALL_VIDEO_NUM = 100
 all_cooked_time = []
 all_cooked_bw = []
 
-# For training ppo
+# ppo 训练参数
 NUM_AGENTS = args.N
 MODEL_SAVE_INTERVAL = args.evaluate_freq
 TRAIN_SEQ_LEN = args.episode_limit
@@ -60,11 +60,11 @@ b_IN_kb = 1000
 start_epoch = 1
 
 USE_GPU = torch.cuda.is_available()
-# USE_GPU = False
 device = torch.device('cuda' if USE_GPU else 'cpu')
 
 batch_size = args.batch_size
 
+# 算法参数，观看时长上下界
 eh = 0.7
 el = 0.3
 
@@ -92,6 +92,7 @@ def run_with_timeout(func, timeout, epoch):
     #     print('=' * 20)
 
 def cul_reward(at, bt, wt, btt, qt):
+    # 计算本次下载决策的奖励
     '''
     :param at: s downloadrange
     :param bt: VIDEO_BIT_RATE[bt] kbps selected video bitrate
@@ -100,13 +101,9 @@ def cul_reward(at, bt, wt, btt, qt):
     :param qt: MB average bandwidth of previous download action
     :return: reward
     '''
-    # if at * VIDEO_BIT_RATE[bt] / 1000. < wt / 1000.:
-    #     print(at, VIDEO_BIT_RATE[bt] / 1000., wt, btt / 1000., qt * 8, sleep_time)
-    #     breakpoint()
+
     wt = wt * 8 / 1000. # kb
     wt = min(wt , 1200) # 带宽浪费上限截断为1.2Mb = 1200kb
-    # if wt != 0:
-    #     print(at, VIDEO_BIT_RATE[bt] / 1000., wt, btt / 1000., qt * 8, sleep_time)
     reward = at * VIDEO_BIT_RATE[bt] / 1000. - 0.01 * wt - 1.85 * btt / 1000. * qt * 8
     # print(reward)
     # print(at * VIDEO_BIT_RATE[bt] / 1000.)
@@ -117,6 +114,8 @@ def cul_reward(at, bt, wt, btt, qt):
     return reward
 
 def update_b_eta_user(x):
+    # 根据用户观看行为更新weibull分布
+
     # print(x)
     x = np.sort(x)
     x = x[x > watch_time_threhold]
@@ -175,6 +174,8 @@ def calculate_P_v(player, tau, t0):
     return P_T_tau / P_T_t0
 
 def get_input_data(video_bitrates, Players, selected_video, est_bw, est_rtt):
+    # 获取算法的输入状态
+
     bi = [VIDEO_BIT_RATE[b] / 1000. for b in video_bitrates] # Mb
     while len(bi) < 5:
         bi.append(0.)
@@ -218,9 +219,9 @@ def get_input_data(video_bitrates, Players, selected_video, est_bw, est_rtt):
     return input
 
 def store_work_agent_data(replay_buffer, s_batchs, raw_a_batchs, r_batchs, v_batchs, log_prob_batchs, dones):
+    # 将子agent执行的轨迹存储到经验缓冲区
 
     s_batchs = torch.tensor(np.array(s_batchs)).permute(1, 0, 2).tolist()
-    # print(s_batchs.shape)
     raw_a_batchs = torch.tensor(np.array(raw_a_batchs)).permute(1, 0).tolist()
     r_batchs = torch.tensor(np.array(r_batchs)).permute(1, 0).tolist()
     v_batchs = torch.tensor(np.array(v_batchs)).permute(1, 0).tolist()
@@ -250,7 +251,7 @@ def central_agent(net_params_queues, exp_queues, args):
 
     policy = policy.to(device)
 
-    # synchronize the network parameters of work agent
+    # 获取模型参数
     net_params = policy.state_dict()
 
     for i in range(NUM_AGENTS):
@@ -260,11 +261,7 @@ def central_agent(net_params_queues, exp_queues, args):
     replay_buffer.reset_buffer()
 
     epoch = start_epoch
-    # torch.autograd.set_detect_anomaly(True)
     while True:
-        # record average reward and td loss change
-        # in the experiences from the agents
-
         s_batchs = []
         raw_a_batchs = []
         r_batchs = []
@@ -273,7 +270,7 @@ def central_agent(net_params_queues, exp_queues, args):
         dones = []
 
         for i in range(NUM_AGENTS):
-            # print(i)
+            # 获取子agent轨迹
             s_batch, raw_a_batch, r_batch, v_batch, log_prob_batch, done = exp_queues[i].get()
             # print(mask)
             s_batchs.append(s_batch)
@@ -283,20 +280,17 @@ def central_agent(net_params_queues, exp_queues, args):
             log_prob_batchs.append(log_prob_batch)
             dones.append(done)
 
+        # 将轨迹存储到经验缓冲区
         store_work_agent_data(replay_buffer, s_batchs, raw_a_batchs,
                               r_batchs, v_batchs, log_prob_batchs, dones)
-        # print(r_batch, v_batch)
 
         if replay_buffer.episode_num == batch_size:
 
             print('=' * 20, 'training of epoch ', epoch, '=' * 20)
             # 抽样，更新
-            # torch.autograd.set_detect_anomaly(True)
             policy.train_ppo(epoch, replay_buffer)
             # 更新完毕，清楚缓冲
             replay_buffer.reset_buffer()
-
-            # log training information
 
             if epoch % MODEL_SAVE_INTERVAL == 0:
                 print("---------epoch %d--------" % epoch)
@@ -332,11 +326,7 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
 
         policy = policy.to(device)
 
-        # Initial the first step
-        current_video_id = 0
-
-        # Initial the state, action, reward batch
-
+        # 初始化 state, action, reward batch
         s_batch = []
         raw_a_batch = []
         r_batch = []
@@ -351,12 +341,9 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
         past_bandwidth_ests =[]
         past_rtt_ests = []
 
-        # sum of wasted bytes for a user
-
+        # 随机选用户和网络轨迹
         user_sample_id = random.randint(0, 4)
-
         network_trace_idx = random.randint(0, len(all_cooked_time) - 1)
-        # network_trace_idx = 0
 
         user_swipe_dir = args.dataset_dir + '/sample_user/'
         user_swipe_trace = user_swipe_dir + '/user_' + str(user_sample_id) + '.txt'
@@ -366,7 +353,7 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
             for line in f:
                 seeds.append(float(line))
 
-        # Initial the environment
+        # 初始化环境
         net_env = env.Environment(user_sample_id, all_cooked_time[network_trace_idx], all_cooked_bw[network_trace_idx], ALL_VIDEO_NUM,
                                   seeds, args.dataset_dir, args.chunklength)
 
@@ -380,9 +367,7 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
         user_view_times = []
         while True:
             if len(net_env.players) < 5:
-
-                # print('env changed')
-
+                # 用户退出，重新初始化环境以及相关参数
                 user_sample_id = random.randint(0, 4)
                 user_swipe_dir = args.dataset_dir + '/sample_user/'
                 user_swipe_trace = user_swipe_dir + '/user_' + str(user_sample_id) + '.txt'
@@ -413,11 +398,14 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
             bitrate_players = []
             download_twice = False
             if first_step:
+                # 第一次决策
                 download_video_id = 0
                 bitrate = 0
                 sleep_time = 0
                 download_range = torch.tensor(2)
             else:
+                # 非第一次
+                # 估计网络吞吐量和rtt
                 start_pos = -min(5, len(past_bandwidth))
                 while past_bandwidth[start_pos] == 0:
                     start_pos += 1
@@ -475,6 +463,7 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
                         Bmax_video += 1
                 # print(idx_agent, demands)
 
+                # 根据需求选择下载的视频
                 if Bmax_video == len(net_env.players):
                     sleep_time = 500.  # 所有视频均缓冲至最大缓冲区，睡眠500ms
                 else:
@@ -501,6 +490,8 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
                     last_chunk_time_left = min(player.video_len, math.ceil(download_length / args.chunklength) * args.chunklength) - download_length
 
                     video_left = (player.video_len - download_length) / 1000.  # s
+
+                    # 判断是否需要分两次下载
                     if download_range.item() > video_left:
                         download_range = torch.tensor(video_left)
 
@@ -519,7 +510,6 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
 
 
             # print(download_video_id, bit_rate, sleep_time)
-            # Take action on and get the states from the env
             user_view_time = net_env.user_models[0].get_ret_duration() / 1000. #s
             if not download_twice or sleep_time != 0:
                 delay, rebuf, video_size, end_of_video, \
@@ -541,20 +531,16 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
 
             pre_play_video_id = play_video_id
 
-            # culculate action reward
-            # 计算上一步的reward
-            # Get the current downloaded chunk number and play chunk number
-
-            if sleep_time == 0.: # 下载导致的再缓冲时长
-
+            # 更新吞吐量和rtt记录
+            if sleep_time == 0.:
                 past_bandwidth = np.roll(past_bandwidth, -1)
                 past_bandwidth[-1] = (float(video_size) / 1000000.0) / (float(delay) / 1000.0)  # MB / s
-
                 # print(delay, rtt)
                 past_rtt = np.roll(past_rtt, -1)
                 past_rtt[-1] = rtt
                 # print(rtt)
 
+            # 计算上一步的reward，由于预取由启发式方法完成，所以仅收集模型进行决策的数据，即下载决策的相关数据
             if sleep_time == 0. and not first_step:
                 if download_twice:
                     at = (download_range_1 + download_range_2).item()
@@ -596,18 +582,6 @@ def work_agent(idx_agent, all_cooked_time, all_cooked_bw, net_params_queue, exp_
                     net_params = net_params_queue.get()
                     policy.load_state_dict(net_params)
                     send_data_count = 0
-
-
-def get_smooth(net_env, last_chunk_bitrate, download_video_id, chunk_id, quality):
-    if download_video_id == 0 and chunk_id == 0:  # is the first chunk of all
-        return 0
-    if chunk_id == 0:  # needs to find the last chunk of the last video
-        last_bitrate = last_chunk_bitrate[download_video_id - 1]
-        if last_bitrate == -1:  # the neighbour chunk is not downloaded
-            return 0
-    else:
-        last_bitrate = net_env.players[download_video_id - net_env.get_start_video_id()].get_downloaded_bitrate()[chunk_id - 1]
-    return abs(quality - VIDEO_BIT_RATE[last_bitrate])
 
 def mpc(all_future_chunks_size, P, buffer_size, last_quality, future_bandwidth):
     CHUNK_COMBO_OPTIONS = []
@@ -738,15 +712,12 @@ def load_trainedOptimal():
 
 def main(args):
     # np.random.seed(RANDOM_SEED)
-    # inter-process communication queues
     net_params_queues = []
     exp_queues = []
     for i in range(NUM_AGENTS):
         net_params_queues.append(mp.Queue(1))
         exp_queues.append(mp.Queue(1))
 
-    # create a coordinator and multiple agent processes
-    # (note: threading is not desirable due to python GIL)
     coordinator = mp.Process(target=central_agent,
                              args=(net_params_queues, exp_queues, args))
     coordinator.start()

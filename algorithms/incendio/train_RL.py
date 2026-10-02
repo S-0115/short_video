@@ -74,17 +74,10 @@ b_IN_kb = 1000
 NN_MODEL_BM = './model_' + str(beta) + '/IL/' + 'bm_agent/bm_actor_epoch_100.pth'
 NN_MODEL_BA = './model_' + str(beta) + '/IL/' + 'ba_agent/ba_actor_epoch_100.pth'
 NN_MODEL_CRITIC = None
-# NN_MODEL_CRITIC = nn_model_save_path + '/critic/critic_pretrain.pth'
-
-# NN_MODEL_BM = nn_model_save_path + '/bm_agent/bm_actor_epoch_50.pth'
-# NN_MODEL_BA = nn_model_save_path + '/ba_agent/ba_actor_epoch_50.pth'
-# NN_MODEL_CRITIC = nn_model_save_path + '/critic/critic_epoch_50.pth'
 
 start_epoch = 1
 
 USE_GPU = torch.cuda.is_available()
-# USE_GPU = False
-
 batch_size = args.batch_size
 
 def test_model(epoch):
@@ -112,7 +105,7 @@ def run_with_timeout(func, timeout, epoch, BM_MODEL_SAVE_PATH, BA_MODEL_SAVE_PAT
     #     print('=' * 20)
 
 def cul_reward(quality, rebuffer, smooth, bandwidth_usage, sleep_time):
-    # print(quality, rebuffer, smooth, bandwidth_usage, sleep_time)
+    # 计算本次下载决策的奖励
     if sleep_time == 0 :
         reward = alpha * quality / 1000. - beta * rebuffer / 1000. - gamma * smooth / 1000. - theta * bandwidth_usage * 8. / 1000000.
     else:
@@ -142,6 +135,7 @@ def calculate_retention_probability(player, mc, m):
 
 
 def get_input_data(past_bandwidth, retention_probs, last_rebufs, Players, abs_cur_play_video_id):
+    # 获取算法的输入状态
     bt = [bd * 8. for bd in past_bandwidth] # Mb/s
 
     lj = [retention_probs[i] for i in range(len(retention_probs))]
@@ -188,7 +182,7 @@ def get_input_data(past_bandwidth, retention_probs, last_rebufs, Players, abs_cu
     return [bt, lj, gj, uj, hj, qj, fj]
 
 def store_work_agent_data(replay_buffer, s_bm_batchs, s_ba_batchs, bts_btachs, a_bm_batchs, a_ba_batchs, r_batchs, v_batchs, bm_log_prob_batchs, ba_log_prob_batchs, dones_bm, dones_ba, bm_mask_batchs, ba_mask_batchs):
-    # print(s_bm_batchs, s_ba_batchs, s_critic_batchs, a_bm_batchs, a_ba_batchs, r_batchs, v_batchs, bm_log_prob_batchs, ba_log_prob_batchs, dones)
+    # 将子agent执行的轨迹存储到经验缓冲区
     s_bm_batchs = torch.tensor(np.array(s_bm_batchs)).permute(1, 0, 2, 3).tolist() # 10,32,4,5
     s_ba_batchs = torch.tensor(np.array(s_ba_batchs)).permute(1, 0, 2, 3).tolist()
     bts_btachs = torch.tensor(np.array(bts_btachs)).permute(1, 0, 2, 3).tolist()
@@ -225,6 +219,7 @@ def central_agent(net_params_queues, exp_queues, args):
     assert len(net_params_queues) == NUM_AGENTS
     assert len(exp_queues) == NUM_AGENTS
 
+    # 初始化模型
     bm_actor = BM_Actor()
     ba_actor = BA_Actor()
 
@@ -247,7 +242,7 @@ def central_agent(net_params_queues, exp_queues, args):
         trainer_rl.ba_actor = trainer_rl.ba_actor.cuda()
         trainer_rl.critic = trainer_rl.critic.cuda()
 
-    # synchronize the network parameters of work agent
+    # 获取模型参数并分发给子agent
     bm_actor_net_params, ba_actor_net_params, critic_net_params = trainer_rl.get_network_params()
     for i in range(NUM_AGENTS):
         net_params_queues[i].put([bm_actor_net_params, ba_actor_net_params, critic_net_params])
@@ -255,18 +250,13 @@ def central_agent(net_params_queues, exp_queues, args):
     replay_buffer = ReplayBuffer(NUM_AGENTS, TRAIN_SEQ_LEN, batch_size, args.norm_rew)
     replay_buffer.reset_buffer()
 
-    # restore neural net parameters
     epoch = start_epoch
-    # assemble experiences from agents, compute the gradients
 
     pre_reward_mean = -math.inf
     reward_mean = 0
     score_decay_count = 0
 
     while True:
-        # record average reward and td loss change
-        # in the experiences from the agents
-
         s_bm_batchs = []
         s_ba_batchs = []
         bts_btachs = []
@@ -281,6 +271,7 @@ def central_agent(net_params_queues, exp_queues, args):
         bm_mask_batch = []
         ba_mask_batch = []
 
+        # 获取子agent轨迹
         for i in range(NUM_AGENTS):
             s_bm_batch, s_ba_batch, bts_btach, a_bm_batch, a_ba_batch, r_batch, v_batch, bm_log_prob_batch, ba_log_prob_batch, done_bm, done_ba, bm_mask, ba_mask = exp_queues[i].get()
             # print(mask)
@@ -300,6 +291,7 @@ def central_agent(net_params_queues, exp_queues, args):
 
             reward_mean += np.mean(r_batch)
 
+        # 将轨迹存储到经验缓冲区
         store_work_agent_data(replay_buffer, s_bm_batchs, s_ba_batchs, bts_btachs, a_bm_batchs,
                               a_ba_batchs, r_batchs, v_batchs, bm_log_prob_batchs, ba_log_prob_batchs, dones_bm, dones_ba,
                               bm_mask_batch, ba_mask_batch)
@@ -320,9 +312,6 @@ def central_agent(net_params_queues, exp_queues, args):
             trainer_rl.train(epoch, replay_buffer)
             # 更新完毕，清楚缓冲
             replay_buffer.reset_buffer()
-
-            # log training information
-
             if epoch % MODEL_SAVE_INTERVAL == 0 and epoch > args.critic_pretrain_epoch:
                 print("---------epoch %d--------" % epoch)
                 # Save the neural net parameters to disk.
@@ -342,7 +331,6 @@ def central_agent(net_params_queues, exp_queues, args):
 
             # 分发模型参数
             bm_actor_net_params, ba_actor_net_params, critic_net_params = trainer_rl.get_network_params()
-
             for i in range(NUM_AGENTS):
                 net_params_queues[i].put([bm_actor_net_params, ba_actor_net_params, critic_net_params])
 
@@ -355,7 +343,6 @@ def central_agent(net_params_queues, exp_queues, args):
 def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_queue, args):
     set_seed()
     with torch.no_grad():
-        # Initial the a3c
         bm_actor = BM_Actor()
         ba_actor = BA_Actor()
         critic = Critic()
@@ -372,11 +359,7 @@ def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_q
             trainer.ba_actor = trainer.ba_actor.cuda()
             trainer.critic = trainer.critic.cuda()
 
-        # Initial the first step
-        current_video_id = 0
-
-        # Initial the state, action, reward batch
-
+        # 初始化 state, action, reward batch
         s_bm_batch = []
         s_ba_batch = []
         bts_batch = []
@@ -396,12 +379,9 @@ def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_q
         last_chunk_bitrate = [-1] * 100
         past_bandwidth = list(np.zeros(PAST_BW_LEN))
 
-        # sum of wasted bytes for a user
-
+        # 随机选用户和网络轨迹
         user_sample_id = random.randint(0, 4)
-
         network_trace_idx = random.randint(0, len(all_cooked_time) - 1)
-        # network_trace_idx = 0
 
         user_swipe_dir = args.dataset_dir + '/sample_user/'
         user_swipe_trace = user_swipe_dir + '/user_' + str(user_sample_id) + '.txt'
@@ -411,7 +391,7 @@ def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_q
             for line in f:
                 seeds.append(float(line))
 
-        # Initial the environment
+        # 初始化环境
         net_env = env.Environment(user_sample_id, all_cooked_time[network_trace_idx], all_cooked_bw[network_trace_idx], ALL_VIDEO_NUM,
                                   seeds, args.dataset_dir, args.chunklength)
 
@@ -420,9 +400,8 @@ def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_q
         play_video_id = 0
         while True:
             if len(net_env.players) < 5:
-
-                print('env changed')
-
+                # 用户退出，重新初始化环境以及相关参数
+                # print('env changed')
                 user_sample_id = random.randint(0, 4)
                 user_swipe_dir = args.dataset_dir + '/sample_user/'
                 user_swipe_trace = user_swipe_dir + '/user_' + str(user_sample_id) + '.txt'
@@ -481,7 +460,6 @@ def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_q
             sleep_time = 0.
 
             # IAM 无效动作掩码
-
             mask = torch.ones_like(pi_video)
             for i in range(5):
                 if net_env.players[i].get_remain_video_num() == 0:
@@ -544,10 +522,7 @@ def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_q
 
             v_batch.append(value.item())
 
-            # culculate action reward
             # 计算上一步的reward
-            # Get the current downloaded chunk number and play chunk number
-
             quality = 0
             smooth = 0
             if sleep_time == 0:
@@ -571,11 +546,12 @@ def work_agent(agent_id, all_cooked_time, all_cooked_bw, net_params_queue, exp_q
                 quality = quality * user_rets[a_bm.item()]
                 smooth = smooth * user_rets[a_bm.item()]
             # print(download_video_id, bit_rate, sleep_time)
-            # Take action on and get the states from the env
+
+            # 环境模型下载过程
             delay, rebuf, video_size, end_of_video, \
             play_video_id, waste_bytes, rtt = net_env.buffer_management(download_video_id, bit_rate, sleep_time)
 
-            if sleep_time == 0: # 下载导致的再缓冲时长
+            if sleep_time == 0:
                 last_rebufs[download_video_id] = rebuf / 1000.
 
                 past_bandwidth = np.roll(past_bandwidth, -1)

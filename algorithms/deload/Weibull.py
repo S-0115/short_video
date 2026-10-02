@@ -27,17 +27,9 @@ def compute_weibull_params(x):
 
 
 if __name__ == '__main__':
+    # 根据视频所有的观看时长数据计算对应视频的用户观看时长的weibull分布
+
     dataset_dir = '../data/dataset'
-    # dataset_dir = '../data/dataset_2s_test'
-    # dataset_dir = '../data/dataset_2s_train'
-
-    # dataset_dir = '../data/sub_datasets/0_subdataset'
-    # dataset_dir = '../data/sub_datasets/1_subdataset'
-    # dataset_dir = '../data/sub_datasets/2_subdataset'
-
-    # dataset_dir = '../data/sub_datasets_view_percentage/0_subdataset'
-    # dataset_dir = '../data/sub_datasets_view_percentage/1_subdataset'
-    # dataset_dir = '../data/sub_datasets_view_percentage/2_subdataset'
 
     video_names_file = dataset_dir + '/video_names.csv'
 
@@ -53,8 +45,3 @@ if __name__ == '__main__':
             result.append(modified_line)
     with open(dataset_dir + '/video_names.csv', 'w') as f:
         f.writelines(result)
-
-    # path = '../data/dataset_2s_test/view_duration/0_3037628'
-    # x = load_video_dimension_data(path)
-    # print(x)
-    # b, eta = compute_weibull_params(x)

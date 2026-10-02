@@ -42,13 +42,12 @@ class MixedLearner:
         self.device = args.device
         utl.seed(self.args.seed)
 
-        # calculate number of updates and keep count of frames/iterations
+        # 计算总更新次数
         self.num_updates = int(
             args.num_frames) // args.policy_num_steps // args.num_processes
         self.frames = 0
         self.iter_idx = 0
 
-        # initialise tensorboard logger
         # 一个封装了tensorboard的summarwriter的类，用于记录训练过程中的相关数据
         if self.args.train:
             self.logger = TBLogger(self.args, self.args.exp_label)
@@ -60,12 +59,7 @@ class MixedLearner:
                 os.makedirs(self.full_output_folder)
             self.logs_detail_performance = open(self.full_output_folder + '/logs.txt', 'a')
 
-        # [ ] use SyncVectorEnv, AsyncVectorEnv will raise Pickle error. Fix it (or simply use the SyncVectorEnv instead?)
-        # self.envs = gym.vector.AsyncVectorEnv([lambda: gym.make(
-        #     id=args.env_name, traj_len=self.args.max_episode_steps) for _ in range(self.args.num_processes)])
-
-        # context setter for both inference and training
-        # 初始化向量化环境，参数包括环境名、并行的环境数量、traj_len（暂时不知道）和是否归一化reward
+        # 初始化向量化环境，参数包括环境名、并行的环境数量、traj_len和是否归一化reward
         self.envs = VectorEnv(encoder_input_feature=self.args.encoder_input_feature,
                               n_env=self.args.num_processes, max_buffer_size=self.args.max_buffer_size,
                               dataset_path=self.args.dataset_path, dataset_path_test=self.args.dataset_path_test,
@@ -81,11 +75,10 @@ class MixedLearner:
         self.args.state_dim = env_paras['dim_state']
         self.args.action_space = env_paras['action_space']
 
-        # initialise VAE and policy
-        # 这里的VAE应该是指论文中说的encoder-decoder架构，同时还有计算loss的方法
+        # VAE是指encoder-decoder架构，同时还有计算loss的方法
         self.vae = VaribadVAE(
             self.args, self.logger, lambda: self.iter_idx, self.num_updates)
-        # 这个相当于replay buffer，存储历史轨迹以训练PPO
+        # replay buffer，存储历史轨迹以训练PPO
         self.policy_storage = self.initialise_policy_storage()
         # 这里初始化PPO的网络
         self.policy = self.initialise_policy()
@@ -111,7 +104,6 @@ class MixedLearner:
         # insert initial observation / embeddings to rollout storage
         self.policy_storage.prev_state[0].copy_(torch.tensor(prev_state))
 
-        # log once before training
         with torch.no_grad():
             print('log once before trainging')
             # self.log(start_time)
@@ -234,7 +226,7 @@ class MixedLearner:
                     # print(r_t.shape)
 
                 # print(done)
-                # 这里如果方法是论文提出的secbad的话，就从infos里提取r_t的值，多少好像没找到r_t是从哪里来的，
+                # 从infos里提取r_t的值
                 done = torch.from_numpy(np.array(done, dtype=int)).to(
                     self.device).float().view((-1, 1))
 
@@ -253,7 +245,7 @@ class MixedLearner:
                     [[0.0] if done_ else [1.0] for done_ in done]).to(self.device)
 
                 # before resetting, update the embedding and add to vae buffer
-                # 这里相当于收集了经验存储到了rollout_storage、vae_buffer(用于计算loss)和policy_storage
+                # 收集经验存储到了rollout_storage、vae_buffer(用于计算loss)和policy_storage
                 # print(prev_state.shape)
                 # print(prev_state)
                 if self.args.pass_latent_to_policy:
@@ -291,16 +283,13 @@ class MixedLearner:
 
                 self.frames += self.args.num_processes
 
-            # 接下来就是用收集到的经验，更新模型的参数
+            # 用收集到的经验，更新模型的参数
             # --- UPDATE ---
             # self.args.precollect_len 是为了在 self.vae.rollout_storage 里面记录 self.args.precollect_len 这么多个 trajectory，
             # 搜集了足够多的 traj 后，再进行 update
             if self.frames >= self.args.precollect_len:
                 print('args updating')
-                # check if we are pre-training the VAE
-                # secbad的代码中好像并不需要预先训练vae
                 # 这里用的 prev_state, belief, latent_mean, latent_logvar 都是上一个 loop 的结果
-                # train_stats: value_loss_epoch, action_loss_epoch, dist_entropy_epoch, loss_epoch
                 self.update(state=torch.tensor(prev_state).float().to(self.device),
                             latent_mean=latent_mean,
                             latent_logvar=latent_logvar)
@@ -318,9 +307,8 @@ class MixedLearner:
         self.envs.close()
 
     def initialise_policy_storage(self):
-        # AdaptiveOnlineStorage 这个东西应该记录的是 num_processes 这么多个 trajectory 从开始到结尾的 state latent belief 这些
+        # AdaptiveOnlineStorage 记录的是 num_processes 这么多个 trajectory 从开始到结尾的 state latent belief 这些
         return AdaptiveOnlineStorage(args=self.args,
-                                     # XXX 'number of env steps to do (per process) before updating', 原来是 400, 是不是需要和原来的 max_traj_len * num_traj 相同？
                                      num_steps=self.args.policy_num_steps,
                                      num_processes=self.args.num_processes,
                                      num_feature=self.args.num_feature,
@@ -438,27 +426,22 @@ class MixedLearner:
 
     # def get_value(self, state, belief, latent_mean, latent_logvar):
     def get_value(self, state, latent_mean, latent_logvar):
-        # get_latent_for_policy 这个函数没什么，只是按照 args 里 agent 能看到哪些东西 把 latent_mean, latent_logvar 拼起来
+        # get_latent_for_policy按照 args 里 agent 能看到哪些东西 把 latent_mean, latent_logvar 拼起来
         latent = utl.get_latent_for_policy(
             self.args, latent_mean=latent_mean, latent_logvar=latent_logvar)
         # 然后就是用 policy 的 V-network 算 value
         return self.policy.actor_critic.get_value(state=state, latent=latent).detach()
 
     def update(self, state, latent_mean, latent_logvar):
-        """
-        Meta-update.
-        Here the policy is updated for good average performance across tasks.
-        :return:
-        """
         # update policy (if we are not pre-training, have enough data in the vae buffer, and are not at iteration 0)
         if self.args.policy in ['a2c', 'ppo']:
             # bootstrap next value prediction
-            with torch.no_grad():  # 虽然是叫 actor_critic, 但如果用 PPO 的话，这个 actor_critic 实际上是用作 policy network & value function 的
+            with torch.no_grad():
                 next_value = self.get_value(state=state,
                                             latent_mean=latent_mean,
                                             latent_logvar=latent_logvar)
             # compute returns for current rollouts
-            # 这里的方法实际上就是按照gae的方法算td reward，把计算得到的结果保存为self.policy_storage.returns
+            # 按照gae的方法算td reward，把计算得到的结果保存为self.policy_storage.returns
             self.policy_storage.compute_returns(next_value, self.args.policy_use_gae, self.args.policy_gamma,
                                                 self.args.policy_tau)
             # update agent (this will also call the VAE update!)
@@ -487,8 +470,6 @@ class MixedLearner:
 
 
     def log(self, start_time):
-        # 5_13 evaluate and visualize in the same frequency
-
         # --- save models ---
         if (self.iter_idx) % self.args.save_interval == 0:
             save_path = os.path.join(self.logger.full_output_folder, 'models')
@@ -535,11 +516,6 @@ class MixedLearner:
                 if self.vae.reward_decoder is not None:
                     torch.save(self.vae.reward_decoder, os.path.join(
                         save_path, f"reward_decoder{idx_label}.pt"))
-
-                # save normalisation params of envs
-                # if self.args.norm_rew_for_policy:
-                #     utl.save_obj(self.envs.venv.ret_rms, save_path,
-                #                  f"env_rew_rms{idx_label}")
 
                 if self.args.norm_rew_for_policy:
                     utl.save_obj(self.envs.rew_rms, save_path, f"env_rew_rms{idx_label}")
@@ -612,15 +588,20 @@ class MixedLearner:
                         # print(f'step_idx: {step_idx}, {time.time() - start_time}')
                         # print(curr_latent_mean.shape, curr_latent_logvar.shape, curr_latent_logvar.shape)
 
+                        # 获取隐含特征
                         latent = utl.get_latent_for_policy(args,
                                                            latent_mean=curr_latent_mean,
                                                            latent_logvar=curr_latent_logvar)
                         # print(state)
+
+                        # 获取掩码
                         mask = self.envs.get_test_env_mask()
                         if mask is not None:
                             mask = mask.to(self.device)
                         # print(f'get latent')
                         # print(state, latent, mask)
+
+                        # 进行决策
                         if self.args.policy in ['ppo', 'a2c']:
                             _, action = self.policy.act(
                                 state=state.float(), latent=latent, mask=mask, deterministic=True)
@@ -1330,67 +1311,11 @@ class MixedLearner:
             self.envs.rew_rms = utl.load_obj(self.args.model_path, 'env_rew_rms' + epoch)
             print(self.envs.rew_rms.mean, self.envs.rew_rms.var)
 
-    def transform_to_onnx(self, epoch=''):
-        self.epoch = epoch
-
-        self.policy.actor_critic = torch.load(os.path.join(self.args.model_path, 'policy' + epoch + '.pt'),
-                                              map_location=self.device, weights_only=False)
-        self.policy.device = self.device
-        self.policy.actor_critic.device = self.device
-        self.vae.encoder = torch.load(os.path.join(self.args.model_path, 'encoder' + epoch + '.pt'),
-                                      map_location=self.device, weights_only=False)
-        self.vae.encoder.device = self.device
-        if self.vae.reward_decoder is not None:
-            self.vae.reward_decoder = torch.load(os.path.join(self.args.model_path, 'reward_decoder' + epoch + '.pt'),
-                                                 map_location=self.device, weights_only=False)
-            self.vae.reward_decoder.device = self.device
-
-        # print(self.policy.actor_critic.state_rms.mean)
-        if self.args.norm_rew_for_policy:
-            self.envs.rew_rms = utl.load_obj(self.args.model_path, 'env_rew_rms' + epoch)
-            print(self.envs.rew_rms.mean, self.envs.rew_rms.var)
-
-        state = torch.randn(1, 6, 5)
-        latent = torch.randn(1, 24)
-        mask = torch.randn(30)
-
-        export_onnx_file_ac = "./actor_critic.onnx"  # 目的ONNX文件名
-        torch.onnx.export(self.policy.actor_critic,
-                          (state, latent, mask),
-                          export_onnx_file_ac,
-                          opset_version=10,
-                          do_constant_folding=True,  # 是否执行常量折叠优化
-                          input_names=["state", "latent", "mask"],  # 输入名
-                          output_names=["action"],  # 输出名
-                          )
-
-        export_onnx_file_encoder = "./encoder.onnx"  # 目的ONNX文件名
-        torch.onnx.export(self.vae.encoder,
-                          (state, latent),
-                          export_onnx_file_encoder,
-                          opset_version=10,
-                          do_constant_folding=True,  # 是否执行常量折叠优化
-                          input_names=["state", "latent"],  # 输入名
-                          output_names=["latent_mean", "latent_var"],  # 输出名
-                          )
-
-        export_onnx_file_decoder = "./decoder.onnx"
-        torch.onnx.export(self.vae.reward_decoder,
-                          latent,
-                          export_onnx_file_decoder,
-                          opset_version=10,
-                          do_constant_folding=True,  # 是否执行常量折叠优化
-                          input_names=["latent"],  # 输入名
-                          output_names=["pred_rew"],  # 输出名
-                          )
-
-    def test_onnx_model(self):
-        pass
-
     def inference(self, hidden_rec, state_encoder, state_policy, step_idx, reward_decoder):
-        # 5_23 compute the best reset point for all the non-stationary envs using secbad algorithm
 
         hidden_rec.encoder_step(state_encoder)
+
+        # 消融
         if not self.args.use_best_latent_selection:
             reset_after = max(step_idx - self.args.max_input_history_length, 0)
             latent_mean, latent_logvar = hidden_rec.get_record(
@@ -1401,20 +1326,13 @@ class MixedLearner:
 
             return latent_mean, latent_logvar, self.args.max_input_history_length + 1, pred_rew.item()
 
+        # 预测决策奖励
         pred_rews = []
         for reset_after in range(max(step_idx - self.args.max_input_history_length, 0), step_idx + 1):
-
-            # i = 6,5,4,3,2,1
-
-            # get q(c|tau_{t-k:t-1})
-            # 5_17 check with xiaoyu
             latent_mean, latent_logvar = hidden_rec.get_record(
                 reset_after=reset_after, up_to=step_idx, label='latent')
 
             latent = torch.cat((latent_mean, latent_logvar), dim=-1)
-            # print(reset_after, step_idx)
-
-            # 5_17 double check the code
             second_term = 1.
 
             if reward_decoder is not None:
@@ -1422,35 +1340,13 @@ class MixedLearner:
                     latent, state_policy.to(self.device))
                 pred_rews.append(pred_rew.mean(dim=-1).item())
 
-        # print(p_G_t_dist)
-
-        # print(state)
-
-        # select segment length with max pred rew
+        # 根据预测奖励选择隐含状态
         pred_rew_ct = max(pred_rews)
         best_unchange_length = len(pred_rews) - pred_rews.index(pred_rew_ct)
-
-        # select segment length with min pred rew
-        # pred_rew_ct = min(pred_rews)
-        # best_unchange_length = len(pred_rews) - pred_rews.index(pred_rew_ct)
-
-        # random select segment length
-        # random_select_lentgh = np.random.randint(0, len(pred_rews))
-        # pred_rew_ct = pred_rews[random_select_lentgh]
-        # best_unchange_length = len(pred_rews) - random_select_lentgh
-
-        # print(pred_rews)
-        # print(best_unchange_length)
-        # print(step_idx)
-        # breakpoint()
         best_reset_after = step_idx + 1 - best_unchange_length
-
-        # best_unchange_length_rec.append(best_unchange_length)
 
         curr_latent_mean, curr_latent_logvar = hidden_rec.get_record(
             reset_after=best_reset_after, up_to=step_idx, label='latent')
-
-        # print('reset_after: {}, up_to: {}'.format(best_reset_after, step_idx))
 
         return curr_latent_mean.clone(), curr_latent_logvar.clone(), best_unchange_length, pred_rew_ct
 

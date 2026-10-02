@@ -181,10 +181,6 @@ class Algorithm:
         i_c = 0  # 当前播放的视频ID
         i = i  # 正在计算的视频ID
 
-        # C = self.past_bandwidth_ests[-1]  # 当前估计的带宽
-
-        # C = self.past_bandwidth[-1]  # 当前估计的带宽
-
         max_error = 0
         error_pos = -5
         if (len(self.past_errors) < 5):
@@ -413,6 +409,7 @@ class Algorithm:
         return VrateTmp
 
     def collect_exp(self, past_bandwidth, retention_probs, Players, download_video_id, bit_rate, abs_cur_play_video_id):
+        # 收集经验轨迹用于incendio的训练
         bt = [bd * 8. for bd in past_bandwidth] # Mb/s
 
         lj = [retention_probs[i] for i in range(len(retention_probs))]

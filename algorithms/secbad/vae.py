@@ -96,8 +96,7 @@ class VaribadVAE:
 
     # def compute_rew_reconstruction_loss(self, latent, prev_obs, next_obs, action, reward, return_predictions=False):
     def compute_rew_reconstruction_loss(self, latent, prev_obs, n_rewards):
-        """ Compute reward reconstruction loss.
-        (No reduction of loss along batch dimension is done here; sum/avg has to be done outside) """
+        """ 计算reward预测损失，MSE"""
 
         if self.args.rew_pred_type == 'gaussian':
             mu, logvar = self.reward_decoder(latent, prev_obs)
@@ -110,15 +109,11 @@ class VaribadVAE:
 
     def compute_loss(self, latent_mean, latent_logvar, vae_prev_obs, vae_next_obs, vae_prev_obs_policy, vae_next_obs_policy, vae_n_rewards, vae_actions,
                      vae_rewards, r_t=None):
-
-        # take one sample for each ELBO term
+        # 获取隐含特征
         latent = torch.cat((latent_mean, latent_logvar), dim=-1)
-
-        # latent_samples = latent_samples[:-1, :, :]
-
+        # 计算损失
         rew_reconstruction_loss = self.compute_rew_reconstruction_loss(latent, vae_next_obs_policy, vae_n_rewards)
         # print(rew_reconstruction_loss.shape)
-        # average across tasks
         rew_reconstruction_loss = rew_reconstruction_loss.mean()
 
         return rew_reconstruction_loss
@@ -130,17 +125,8 @@ class VaribadVAE:
             print('vae not ready')
             return 0
 
-        # get a mini-batch
-
-        # prev_state, next_state, actions, rewards, r_ts
+        # 抽取轨迹，重新计算隐含特征和loss
         vae_prev_obs, vae_next_obs, vae_prev_obs_policy, vae_next_obs_policy, vae_n_rewards, vae_actions, vae_rewards, r_t = self.rollout_storage.get_batch(batchsize=self.args.vae_batch_num_trajs)
-        # vae_prev_obs, vae_next_obs, vae_actions, vae_rewards, r_t = self.vae_buffer.get_batch(
-        #     batchsize=self.args.vae_batch_num_trajs)
-
-        # vae_prev_obs will be of size: max trajectory len x num trajectories x dimension of observations
-
-        # pass through encoder (outputs will be: (max_traj_len+1) x number of rollouts x latent_dim -- includes the prior!)
-        # FIXED 5_16 注意这里并没有引入何时 reset RNN hidden state 的概念，可能需要改
         latent_mean, latent_logvar, _ = self.encoder(
                                                         states=vae_next_obs.to(self.device),
                                                         hidden_state=None,
@@ -157,15 +143,6 @@ class VaribadVAE:
         if update:
             self.optimiser_vae.zero_grad()
             loss.backward()
-
-            # clip gradients
-            # if self.args.encoder_max_grad_norm is not None:
-            #     nn.utils.clip_grad_norm_(
-            #         self.encoder.parameters(), self.args.encoder_max_grad_norm)
-            # if self.args.decoder_max_grad_norm is not None:
-            #     if self.args.decode_reward:
-            #         nn.utils.clip_grad_norm_(
-            #             self.reward_decoder.parameters(), self.args.decoder_max_grad_norm)
 
             # update
             self.optimiser_vae.step()

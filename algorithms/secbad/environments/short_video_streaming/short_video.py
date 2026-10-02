@@ -73,8 +73,6 @@ class short_video_env(gym.Env):
         self.last_info = {}
         self.observation_encoder = []
 
-    # rewrite step function to recompute the reward function
-
     def step(self, action):
         # print(action)
         act = int(action[0])
@@ -93,12 +91,9 @@ class short_video_env(gym.Env):
             sleep_time = 0
 
         # print('action is ',download_video_id, bit_rate, sleep_time)
-        # calculate the quality and smooth for this download step taken
+        # 计算本次下载的quality和smooth
         quality = 0
         smooth = 0
-        # quality_rew = 0
-        # smooth_rew = 0
-        # waste_bytes_rew = 0
         if sleep_time == 0:
             # the last chunk id that user watched
             max_watch_chunk_id = self.net_env.user_models[
@@ -141,10 +136,6 @@ class short_video_env(gym.Env):
                 play_chunk_ct = -1
 
         # play_video_max_watch_chunk_id = self.net_env.user_models[0].get_watch_chunk_cnt()
-        # if play_video_max_watch_chunk_id < 6:
-        #     view_type = 0
-        # else:
-        #     view_type = 1
 
         view_type = self.pre_retention_probs
 
@@ -161,10 +152,6 @@ class short_video_env(gym.Env):
         for player in self.net_env.players:
             buffer_size += player.buffer_size / 1000.
 
-        # buffer_size = self.net_env.players[0].get_buffer_size() / 1000.
-        #     print(player.buffer_size, player.get_remain_video_num(), player.get_chunk_sum())
-        # print()
-
         if sleep_time == 0:
             self.past_bandwidth = np.roll(self.past_bandwidth, -1)
             self.past_bandwidth[-1] = (float(video_size) / 1000000.0) / (float(delay) / 1000.0)  # MB / s
@@ -174,7 +161,7 @@ class short_video_env(gym.Env):
 
         sum_wasted_bytes = waste_bytes
 
-        # play over all videos
+        # 用户退出
         if len(self.net_env.players) < 5:
             for player in self.net_env.players:
                 for i in range(len(player.download_chunk_bitrate)):
@@ -189,7 +176,6 @@ class short_video_env(gym.Env):
         qoe = alpha * quality / 1000. - beta * rebuf / 1000. - gamma * smooth / 1000.
 
         reward = alpha * quality / 1000. - beta * rebuf / 1000. - gamma * smooth / 1000. # - theta * video_size * 8 / 1000000.
-        # reward = alpha * quality_rew / 1000. - beta * rebuf / 1000. - gamma * smooth_rew / 1000. # - theta * video_size * 8 / 1000000.
         reward = torch.tensor(reward)
 
         # 2. 计算保留概率和Max Buffer阈值
@@ -230,8 +216,6 @@ class short_video_env(gym.Env):
         self.play_video_id = play_video_id
 
         return observation, reward, done, False, info
-
-    # rewrite reset_model function to set the traj_context
 
     def get_smooth(self, net_env, download_video_id, chunk_id, quality):
         if download_video_id == 0 and chunk_id == 0:  # is the first chunk of all
@@ -486,13 +470,8 @@ class short_video_env(gym.Env):
         return sleep_judge
 
     def get_traj_context(self):
-        """Use user swipe and network trace as context
+        # 将用户和网络轨迹作为context
 
-        Args:
-
-        Returns:
-            _type_: _description_
-        """
         trace_num = len(os.listdir(self.network_traces_path))
         user_sample_id = np.random.randint(5)
         trace_id = np.random.randint(trace_num)

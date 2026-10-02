@@ -6,6 +6,7 @@ USE_GPU = torch.cuda.is_available()
 device = torch.device('cuda' if USE_GPU else 'cpu')
 
 class ReplayBuffer:
+    # 经验缓冲区，用于存储经验轨迹更新模型
     def __init__(self, N, episode_limit, batch_size):
         self.N = N
         self.episode_limit = episode_limit
@@ -63,10 +64,6 @@ class ReplayBuffer:
         if self.episode_count == self.episode_limit:
             self.episode_num += 1
             self.episode_count = 0
-
-    # def store_last_value(self, episode_step, v_n):
-    #     self.buffer['v_n'][self.episode_num][episode_step] = v_n
-    #     self.episode_num += 1
 
     def get_training_data(self):
         batch = {}

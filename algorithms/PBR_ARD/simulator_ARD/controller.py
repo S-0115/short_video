@@ -192,6 +192,7 @@ class Environment:
             if first_step:
                 total_frames_num -= (self.Kp - 1)
 
+            # 按帧进行下载
             i = 0
             while i < total_frames_num:
                 if user_switch_video:
@@ -334,10 +335,6 @@ class Environment:
         return delay, rebuf, video_size, end_of_video, self.play_video_id, wasted_bytes, rtt, self.Q_set
 
     def ard(self, A, y, occur_I_frame, w):
-        # print('ard')
-        # print(past_bw, A, y, occur_I_frame, w)
-        # self.Kr = 1
-        # return
 
         if y == 1:
             self.Kr = 1

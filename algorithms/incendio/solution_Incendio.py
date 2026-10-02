@@ -22,7 +22,6 @@ PLAYER_NUM = 5
 MILLISECONDS_IN_SECOND = 1000.0
 
 USE_GPU = torch.cuda.is_available()
-# USE_GPU = False
 device = torch.device('cuda' if USE_GPU else 'cpu')
 
 
@@ -87,7 +86,7 @@ class Algorithm:
         # 1. 更新带宽估计
         # self.update_bandwidth_estimate_()
 
-        # 2. 计算保留概率和Max Buffer阈值
+        # 2. 计算保留概率
         retention_probs = self.calculate_retention_probabilities(Players)
         # print(retention_probs)
 

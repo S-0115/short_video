@@ -15,11 +15,7 @@ def run_dashlet():
     chunklength = 2000  # ms
     # run for pdas
     epoch = 20
-    # dataset_dir = '../data/dataset'
-    dataset_dir = '../data/dataset_2s_test'
-    # dataset_dir = '../data/sub_datasets/0_subdataset'
-    # dataset_dir = '../data/dataset_2s_train'
-    # dataset_dir = '../data/sub_datasets/0_subdataset'
+    dataset_dir = '../data/dataset'
     os.system(f'python run_dashlet.py '
               # f'--trace sampled_traces_for_motivation '
               f'--trace sampled_trace_for_memory_runtime '

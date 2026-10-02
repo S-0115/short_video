@@ -24,9 +24,6 @@ nn_model_save_path= './model_' + str(beta) + '/IL/'
 
 exp_pool_path = './exp_pool_' + str(beta) + '/'
 
-# NN_MODEL_BM = nn_model_save_path + 'bm_agent/bm_actor_epoch_' + '250' + '.pth'
-# NN_MODEL_BA = nn_model_save_path + 'ba_agent/ba_actor_epoch_' + '250' + '.pth'
-
 start_epoch = 0
 
 NN_MODEL_BM = None

@@ -15,13 +15,11 @@ parser.add_argument('--chunklength', type=float, help='ms')
 
 args = parser.parse_args()
 
-# QoE arguments
-
+# QoE 参数
 from config_algorithm import VIDEO_BIT_RATE
 from config_algorithm import alpha, beta, gamma, theta
 
-# calculate the smooth penalty for an action to download:
-# chunk:[chunk_id] of the video:[download_video_id] with bitrate:[quality]
+# 计算smooth惩罚
 def get_smooth(net_env, download_video_id, chunk_id, quality):
     if download_video_id == 0 and chunk_id == 0:  # is the first chunk of all
         return 0
@@ -37,38 +35,41 @@ def test(trace_id, user_sample_id, swipe_trace_user_i, network=None):
 
     # print('------------trace ', trace_id, '--------------', file=log_file)
 
+    # 初始化算法
     from solution_pdas import Algorithm
-
-    # start the test
-
     solution = Algorithm()
     solution.Initialize(args.chunklength)
 
-    # all_cooked_time, all_cooked_bw = short_video_load_trace.load_trace(trace_path)
+    # 初始化环境
     net_env = env.Environment(user_sample_id, all_cooked_time[trace_id], all_cooked_bw[trace_id], ALL_VIDEO_NUM, swipe_trace_user_i, args.dataset_dir, args.chunklength)
     if network is not None:
         # print(network.mahimahi_ptr, '=================')
         net_env.network = network
-    # Decision variables
+
+    # 算法决策  第一次
     download_video_id, bit_rate, sleep_time = solution.run(0, 0, 0, False, 0, net_env.players, True)  # take the first step
 
-    # sum of wasted bytes for a user
+    # QoE及其组成
     QoE = 0
-
     quality_all = 0
     smooth_all = 0
     rebuffer_all = 0
 
-    sum_wasted_bytes = 0
+    # 睡眠时间
+    sleep_all = 0
 
+    # 带宽使用
     bandwidth_usage = 0  # record total bandwidth usage
 
     real_time = 0
+
     pre_play_video_id = 0
 
+    # 观看和下载的视频块数量
     view_chunk_num = 0
     download_chunk_num = 0
 
+    # 分视频统计 Qoe相关指标
     performance_view_time = {0:np.zeros(5), 1:np.zeros(5)}
     qoe_video = [0] * ALL_VIDEO_NUM
     quality_video = [0] * ALL_VIDEO_NUM
@@ -76,15 +77,15 @@ def test(trace_id, user_sample_id, swipe_trace_user_i, network=None):
     rebuffer_video = [0] * ALL_VIDEO_NUM
     bw_wastage_video = [0] * ALL_VIDEO_NUM
 
+    # 分观看时长统计 qoe相关指标
     count_view_chunk_view_time = [0] * 2
     count_view_chunk_video = [0] * ALL_VIDEO_NUM
     count_video_num_view_time = [0] * 2
 
     while True:
-        # calculate the quality and smooth for this download step taken
+        # 计算本次下载的quality和smooth
         quality = 0
         smooth = 0
-
         if sleep_time == 0:
             if download_video_id >= ALL_VIDEO_NUM - 4:
                 download_chunk_num += 1
@@ -125,6 +126,7 @@ def test(trace_id, user_sample_id, swipe_trace_user_i, network=None):
         else:
             user_swipe = 1
 
+        # log本次下载的相关信息
         print(f'{real_time},{pre_play_video_id},{download_video_id},{bit_rate},{sleep_time},{delay},{rebuf},{user_swipe},{buffer_size},{throughput}', file=log_file)
 
         if sleep_time != 0:
@@ -132,22 +134,23 @@ def test(trace_id, user_sample_id, swipe_trace_user_i, network=None):
         else:
             real_time += int(delay)
 
-        # Update bandwidth usage
+        # 更新带宽使用
         bandwidth_usage += video_size
 
-        # Update bandwidth wastage
+        # 更新带宽浪费
         sum_wasted_bytes += waste_bytes  # Sum up the bandwidth wastage
 
-        # Update QoE:
-
+        # 更新qoe
         one_step_QoE = alpha * quality / 1000. - beta * rebuf / 1000. - gamma * smooth / 1000.
 
+        # 更新对于视频的qoe数据
         qoe_video[download_video_id] += one_step_QoE
         quality_video[download_video_id] += quality / 1000.
         smooth_video[download_video_id] += smooth / 1000.
         rebuffer_video[download_video_id] += rebuf
         bw_wastage_video[pre_play_video_id] += waste_bytes
 
+        # 更新对应观看时长的数据
         if user_swipe == 1:
             for idx in range(play_video_id - pre_play_video_id):
                 count_view_chunk_video[pre_play_video_id + idx] += math.ceil(user_rets[idx].get_ret_duration() / args.chunklength)
@@ -169,13 +172,14 @@ def test(trace_id, user_sample_id, swipe_trace_user_i, network=None):
 
         pre_play_video_id = play_video_id
 
+        # 更新qoe
         QoE += one_step_QoE
 
         quality_all += quality / 1000.
         smooth_all += smooth / 1000.
         rebuffer_all += rebuf / 1000.
 
-        # play over all videos
+        # 用户退出
         if len(net_env.players) < 5:
             for player in net_env.players:
                 for i in range(len(player.download_chunk_bitrate)):
@@ -184,10 +188,11 @@ def test(trace_id, user_sample_id, swipe_trace_user_i, network=None):
                     sum_wasted_bytes += download_size
             break
 
-        # Apply the participant's algorithm to decide the args for the next step
+        # 算法决策
         download_video_id, bit_rate, sleep_time = solution.run(delay, rebuf, video_size, end_of_video, play_video_id, net_env.players, False)
         # print(download_video_id, bit_rate, sleep_time)
 
+    # 按观看时长分类，统计qoe及其组成部分的均值
     for catefory_ in performance_view_time:
         performance_view_time[catefory_][0] /= count_view_chunk_view_time[catefory_]
         performance_view_time[catefory_][1] /= count_view_chunk_view_time[catefory_]
@@ -222,18 +227,21 @@ def test(trace_id, user_sample_id, swipe_trace_user_i, network=None):
 
 def test_all_traces(trace, user_sample_id, f_performance):
 
+    # log文件路径
     LOG_DIR = 'logs/' + str(os.path.basename(args.dataset_dir)) + '/user_' + str(user_sample_id) + '/'
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
 
-    S_all = 0
     avg_0 = np.zeros(5)
     avg_1 = np.zeros(5)
     avg_all = np.zeros(5)
+
+    # 网络轨迹
     cooked_trace_folder = '../data/network_traces/' + trace + '/'
     global all_cooked_time, all_cooked_bw, ALL_VIDEO_NUM, last_chunk_bitrate
     all_cooked_time, all_cooked_bw = short_video_load_trace.load_trace(cooked_trace_folder)
 
+    # 用户行为
     user_swipe_dir = args.dataset_dir + '/sample_user/'
     user_swipe_trace = user_swipe_dir + '/user_' + str(user_sample_id) + '.txt'
     swipe_trace_user_i = []

@@ -35,14 +35,6 @@ class VectorEnv():
 
     def _make_vector_env(self):
         print('Making vector env')
-        # self.vec_env = gym.vector.AsyncVectorEnv([
-        #     lambda: self.env_class(traj_len=self.traj_len, id=i) for i in range(self.n_env)
-        # ])
-        # self.vec_env = gym.vector.SyncVectorEnv([
-        #     lambda: self.env_class(traj_len=self.traj_len, id=i, dataset_path=self.dataset_path,
-        #                            network_traces_path=self.network_traces_path, chunklength=self.chunklength) for i in
-        #     range(self.n_env)
-        # ])
         # self.env_class是根据env_name找对应环境的具体实现类，然后通过gym创建多个同步的环境
         if self.train:
             self.vec_env = gym.vector.SyncVectorEnv([
@@ -66,6 +58,7 @@ class VectorEnv():
                               'dim_state': tmp_env.observation_space.shape[1]}
 
     def reset(self, traj_context_ls, seed=None):
+        # 重置训练环境
         print('train env reset')
         assert len(traj_context_ls) == self.n_env
         options_dict = {'traj_context': {}}
@@ -76,10 +69,12 @@ class VectorEnv():
         return init_obs
 
     def reset_train_i(self, i):
+        # 重置某一个训练环境
         init_obs = self.vec_env.envs[i].reset()
         return init_obs
 
     def reset_test(self, traj_context, seed=None):
+        # 重置测试环境
         print('test env reset')
         # traj_context = options['traj_context'][self.id]
         init_obs = self.test_env.reset(
@@ -90,8 +85,7 @@ class VectorEnv():
         return self.test_env.net_env.network.bd_sum
 
     def test_env_step(self, action):
-        # copied from utils.helpers.env_step
-
+        # 模拟下载，返回奖励等信息
         next_obs, reward, done, _,  infos = self.test_env.step(action)
 
         normalized_reward = None
@@ -105,8 +99,7 @@ class VectorEnv():
         return next_obs, [reward, normalized_reward], done, infos
 
     def train_env_step(self, action):
-        # print(act)
-        # print(self.vec_env.step(act))
+        # 模拟下载，返回奖励等信息
         next_obs, reward, done, _, infos = self.vec_env.step(action)
 
         normalized_reward = None
@@ -124,13 +117,13 @@ class VectorEnv():
         return next_obs, [reward, normalized_reward], done, infos
 
     def train_env_i_step(self, action, i):
-        # print(act)
-        # print(self.vec_env.step(act))
+        # 模拟下载，返回奖励等信息
         next_obs, reward, done, _, infos = self.vec_env.envs[i].step(action)
 
         return next_obs, [reward, None], done, infos
 
     def get_train_env_mask(self):
+        # 获取IAM掩码
         mask = [env.get_mask() for env in self.vec_env.envs]
         mask = torch.as_tensor(mask, dtype=torch.bool)
         return mask
