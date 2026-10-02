@@ -1,0 +1,6 @@
+numpy==1.24.4
+torch==2.4.1
+gym==0.26
+matplotlib
+tensorboard==2.14.0
+scipy==1.10.1
