@@ -90,8 +90,6 @@ short_video/
     ├── data/
     │   ├── generate_dataset_2s.py
     │   ├── sample_user_by_KuaiRand_view_time.py
-    │   ├── count_view_percentage.py
-    │   ├── analyze_network_trace.py
     │   └── network_traces/
     │       └── sample_network_traces.py
     │
@@ -241,21 +239,22 @@ The `algorithms/data/` directory contains scripts for preparing user-behavior da
 
 The user-behavior processing code uses data derived from **KuaiRand-27K**.
 
----
+`get_video_duration_video_ret.ipynb` samples user playback durations from KuaiRand-27K.
 
-## Video/User Dataset Preparation
-
-`generate_dataset_2s.py` samples **100 videos** from the input video set and copies the corresponding user-retention, user-switching-probability, and viewing-duration files into a local dataset directory.
-
-Before running the script, prepare:
+It generates dataset files under:
 
 ```text
-algorithms/data/random_sampled_video/
+random_sampled_video/
 ├── video_names.csv
 ├── user_ret/
 ├── user_switch_prob/
 └── view_duration/
 ```
+---
+
+## Video/User Dataset Preparation
+
+`generate_dataset_2s.py` samples **100 videos** from the input video set and copies the corresponding user-retention, user-switching-probability, and viewing-duration files into a local dataset directory.
 
 ---
 
@@ -278,14 +277,6 @@ python sample_user_by_KuaiRand_view_time.py 12 0
 
 ---
 
-## Video Duration and Viewing-Behavior Analysis
-
-`algorithms/get_video_duration_video_ret.ipynb` analyzes video duration and viewing behavior.
-
-The notebook depends on the corresponding prepared input data.
-
----
-
 ## Network Trace Preparation
 
 `algorithms/data/network_traces/sample_network_traces.py` contains code for processing and sampling the source 4G network trace:
@@ -294,13 +285,7 @@ The notebook depends on the corresponding prepared input data.
 NewFile-HighDensity-4G.txt
 ```
 
-The script reads the original trace values and contains code for extracting fixed-length traces and converting the values to Mbps. 
-
----
-
-## Network-Trace Analysis
-
-`algorithms/data/analyze_network_trace.py` analyzes the prepared network traces.
+The script reads the original trace values and contains code for extracting fixed-length traces and converting the values to Mbps.
 
 ---
 
