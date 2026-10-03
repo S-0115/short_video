@@ -2,15 +2,15 @@
 
 ## Introduction
 
-This repository contains the implementation and experimental code for **short-video streaming and adaptive bitrate (ABR)** research.
+This repository contains implementation and experimental code for **short-video streaming and adaptive bitrate (ABR)** research.
 
-The repository provides a common short-video streaming simulator together with implementations of several short-video ABR algorithms, including **PDAS, Incendio, Dashlet, DeLoad, PBR-ARD, and SecBAD(PARA)**. It also contains scripts for dataset preparation, network-trace processing, experiment execution, runtime/memory measurement, and result analysis.
+The repository provides a short-video streaming simulation environment together with implementations of several short-video ABR algorithms, including **PDAS, Incendio, Dashlet, DeLoad, PBR-ARD, and SecBAD(PARA)**. It also contains scripts and notebooks for preparing user-behavior datasets, processing network traces, running experiments, and analyzing experimental results.
 
 The repository is mainly organized into three parts:
 
-- **Algorithm implementations:** Implementations and evaluation scripts for multiple short-video ABR algorithms.
-- **Simulation environment:** A common simulator for modeling video playback, user viewing behavior, network conditions, buffering, rebuffering, and bandwidth waste.
-- **Data processing and analysis:** Scripts and notebooks for preparing datasets, processing network traces, measuring algorithm performance, and analyzing experimental results.
+- **ABR algorithm implementations:** Implementations, training code, and evaluation scripts for several short-video ABR algorithms.
+- **Simulation environments:** Simulation components for video playback, user viewing behavior, network conditions, buffering, and bitrate adaptation.
+- **Data preparation and analysis:** Scripts and notebooks for preparing datasets, processing network traces, and analyzing viewing behavior and experimental results.
 
 ---
 
@@ -27,14 +27,13 @@ short_video/
 │
 ├── simulator/
 │   ├── controller.py
-│   ├── controller_back_up.py
 │   ├── mpc_module.py
 │   ├── network_module.py
 │   ├── short_video_load_trace.py
 │   ├── user_module.py
 │   └── video_player.py
 │
-├── algorithms/
+└── algorithms/
     │
     ├── PBR_ARD/
     │   ├── simulator_ARD/
@@ -44,6 +43,7 @@ short_video/
     │   └── test_one_dataset_ard.py
     │
     ├── dashlet/
+    │   ├── MPC_balanced.txt
     │   ├── solution_dashlet.py
     │   ├── run_dashlet.py
     │   └── test_one_dataset_dashlet.py
@@ -51,6 +51,9 @@ short_video/
     ├── deload/
     │   ├── model/
     │   ├── simulator_deload/
+    │   ├── Weibull.py
+    │   ├── config_algorithm.py
+    │   ├── exp_buffer.py
     │   ├── train.py
     │   ├── solution_deload.py
     │   ├── run_deload.py
@@ -58,6 +61,8 @@ short_video/
     │
     ├── incendio/
     │   ├── Incendio_model.py
+    │   ├── exp_dataset.py
+    │   ├── replay_buffer.py
     │   ├── train_IL.py
     │   ├── train_RL.py
     │   ├── solution_Incendio.py
@@ -65,6 +70,7 @@ short_video/
     │   └── test_one_dataset_incendio.py
     │
     ├── pdas/
+    │   ├── MPC_balanced.txt
     │   ├── Training.py
     │   ├── solution_pdas.py
     │   ├── run_pdas.py
@@ -75,6 +81,7 @@ short_video/
     │   ├── config/
     │   ├── environments/
     │   ├── models/
+    │   ├── utils/
     │   ├── main.py
     │   ├── mixed_learner.py
     │   ├── vae.py
@@ -86,6 +93,7 @@ short_video/
     │   ├── count_view_percentage.py
     │   ├── analyze_network_trace.py
     │   └── network_traces/
+    │       └── sample_network_traces.py
     │
     ├── analyze_network.ipynb
     ├── get_video_duration_video_ret.ipynb
@@ -96,24 +104,17 @@ short_video/
 
 # Algorithms
 
-The `algorithms/` directory contains implementations and evaluation scripts for multiple short-video ABR algorithms.
+The `algorithms/` directory contains implementations and evaluation scripts for several short-video ABR algorithms.
 
 ## PDAS
 
 The `algorithms/pdas/` directory contains the PDAS implementation.
 
-- `Training.py`: Training of fastmpc.
-- `MPC_balanced.txt`: Trained fastmpc.
-- `solution_pdas.py`: PDAS decision algorithm.
+- `Training.py`: Training code for the MPC-related component.
+- `MPC_balanced.txt`: Pre-trained fastMPC used by PDAS.
+- `solution_pdas.py`: PDAS bitrate adaptation logic.
 - `run_pdas.py`: Runs the PDAS simulation.
-- `test_one_dataset_pdas.py`: Runs PDAS on a configured dataset and network-trace set.
-
-Run the configured test:
-
-```bash
-cd algorithms/pdas
-python test_one_dataset_pdas.py
-```
+- `test_one_dataset_pdas.py`: Runs the configured PDAS experiment.
 
 ---
 
@@ -124,18 +125,12 @@ The `algorithms/incendio/` directory contains the Incendio implementation and tr
 - `Incendio_model.py`: Incendio model definition.
 - `train_IL.py`: Imitation-learning training code.
 - `train_RL.py`: Reinforcement-learning training code.
-- `replay_buffer.py`: Replay buffer implementation.
+- `replay_buffer.py`: Replay-buffer implementation.
 - `exp_dataset.py`: Experience-dataset related code.
-- `solution_Incendio.py`: Incendio decision algorithm.
+- `utils.py`: Utility functions.
+- `solution_Incendio.py`: Incendio bitrate adaptation logic.
 - `run_incendio.py`: Runs the Incendio simulation.
-- `test_one_dataset_incendio.py`: Runs Incendio on the configured dataset and network traces.
-
-Run the configured test:
-
-```bash
-cd algorithms/incendio
-python test_one_dataset_incendio.py
-```
+- `test_one_dataset_incendio.py`: Runs the configured Incendio experiment.
 
 ---
 
@@ -143,18 +138,10 @@ python test_one_dataset_incendio.py
 
 The `algorithms/dashlet/` directory contains the Dashlet implementation.
 
-- `Training.py`: Training of fastmpc.
-- `MPC_balanced.txt`: Trained fastmpc.
-- `solution_dashlet.py`: Dashlet decision algorithm.
+- `MPC_balanced.txt`: fastMPC used by Dashlet(generated by Training.py in pdas).
+- `solution_dashlet.py`: Dashlet bitrate adaptation logic.
 - `run_dashlet.py`: Runs the Dashlet simulation.
-- `test_one_dataset_dashlet.py`: Runs Dashlet on the configured dataset and network traces.
-
-Run the configured test:
-
-```bash
-cd algorithms/dashlet
-python test_one_dataset_dashlet.py
-```
+- `test_one_dataset_dashlet.py`: Runs the configured Dashlet experiment.
 
 ---
 
@@ -164,19 +151,13 @@ The `algorithms/deload/` directory contains the DeLoad implementation.
 
 - `model/PPO.py`: PPO-related model implementation.
 - `train.py`: Training code.
-- `exp_buffer.py`: Experience buffer.
+- `exp_buffer.py`: Experience-buffer implementation.
 - `Weibull.py`: Weibull-related functionality.
-- `solution_deload.py`: DeLoad decision algorithm.
+- `config_algorithm.py`: DeLoad configuration.
+- `solution_deload.py`: DeLoad bitrate adaptation logic.
 - `run_deload.py`: Runs the DeLoad simulation.
-- `test_one_dataset_deload.py`: Runs DeLoad on the configured dataset and network traces.
+- `test_one_dataset_deload.py`: Runs the configured DeLoad experiment.
 - `simulator_deload/`: DeLoad-specific simulator components.
-
-Run the configured test:
-
-```bash
-cd algorithms/deload
-python test_one_dataset_deload.py
-```
 
 ---
 
@@ -184,17 +165,12 @@ python test_one_dataset_deload.py
 
 The `algorithms/PBR_ARD/` directory contains the PBR-ARD implementation and its dedicated simulator.
 
-- `solution_ard.py`: PBR-ARD decision algorithm.
+- `config_algorithm.py`: PBR-ARD configuration.
+- `solution_ard.py`: PBR-ARD bitrate adaptation logic.
 - `run_ard.py`: Runs the PBR-ARD simulation.
-- `test_one_dataset_ard.py`: Runs PBR-ARD on the configured dataset and network traces.
+- `test_one_dataset_ard.py`: Runs the configured PBR-ARD experiment.
 - `simulator_ARD/`: PBR-ARD-specific simulator components.
-
-Run the configured test:
-
-```bash
-cd algorithms/PBR_ARD
-python test_one_dataset_ard.py
-```
+- `count_run_time_memory_usage.py`: Measures runtime and memory usage.
 
 ---
 
@@ -204,60 +180,56 @@ The `algorithms/secbad/` directory contains the SecBAD implementation.
 
 The implementation includes:
 
-- `algorithms/`: A2C, PPO, and related learning components.
-- `config/`: Configuration files for short-video streaming.
+- `algorithms/`: Learning algorithms and supporting components.
+- `config/`: Short-video streaming configuration.
 - `environments/`: Short-video streaming environment.
-- `models/`: Encoder, decoder, policy, SAC, and DQN-related models.
+- `models/`: Encoder, decoder, policy, and related model components.
+- `utils/`: Supporting utilities and logging/storage components.
 - `mixed_learner.py`: Main learner implementation.
 - `vae.py`: VAE-related implementation.
 - `main.py`: Main entry point.
 - `test_one_dataset_secbad.py`: Evaluation script.
 
-Run the configured evaluation:
-
-```bash
-cd algorithms/secbad
-python test_one_dataset_secbad.py
-```
-
 ---
 
 # Short-Video Streaming Simulator
 
-The `simulator/` directory provides the common simulation environment used by several algorithms.
+The top-level `simulator/` directory contains the main short-video streaming simulation components.
 
 ## Environment
 
-`simulator/controller.py` defines the main `Environment` class.
+`simulator/controller.py` defines the main simulation environment.
 
-The environment models:
+The simulator models components including:
 
-- Multiple concurrently visible short videos.
-- User viewing duration and swipe behavior.
+- Multiple concurrent short-video players.
+- User viewing behavior and video switching.
 - Video playback and buffering.
 - Network throughput.
 - Bitrate selection.
 - Rebuffering.
-- Bandwidth usage and wasted bandwidth.
-- Video switching between consecutive short videos.
+- Downloaded and viewed video data.
+- Bandwidth usage and bandwidth waste.
 
-The simulator maintains multiple `Player` instances and corresponding user-retention models. The default player configuration contains **5 concurrently managed videos**.
+The simulator contains multiple `Player` instances and corresponding user-related state.
+
+> Some algorithms use their own simulator/environment implementations. In particular, PBR-ARD, DeLoad, and SecBAD contain dedicated simulation/environment components.
 
 ## Network Module
 
-`simulator/network_module.py` implements network-trace processing and network evolution during simulation.
+`simulator/network_module.py` processes network traces and updates network conditions during simulation.
 
 ## Video Player
 
 `simulator/video_player.py` implements video playback and buffer-related operations.
 
-## User Model
+## User Module
 
-`simulator/user_module.py` provides the user-retention model used to represent viewing duration and user behavior.
+`simulator/user_module.py` provides user-related behavior used by the simulation.
 
 ## Trace Loading
 
-`simulator/short_video_load_trace.py` loads network traces used by the streaming simulator.
+`simulator/short_video_load_trace.py` loads the network traces used by the main simulator.
 
 ---
 
@@ -265,52 +237,31 @@ The simulator maintains multiple `Player` instances and corresponding user-reten
 
 The `algorithms/data/` directory contains scripts for preparing user-behavior data and network traces.
 
-`get_video_duration_video_ret.ipynb` samples user playback durations from KuaiRand-27K.
+## External User-Behavior Data
 
-Run:
+The user-behavior processing code uses data derived from **KuaiRand-27K**.
 
-```bash
-cd algorithms/data
-python get_video_duration_video_ret.ipynb
-```
+---
 
-It generates dataset files under:
+## Video/User Dataset Preparation
+
+`generate_dataset_2s.py` samples **100 videos** from the input video set and copies the corresponding user-retention, user-switching-probability, and viewing-duration files into a local dataset directory.
+
+Before running the script, prepare:
 
 ```text
-random_sampled_video/
+algorithms/data/random_sampled_video/
 ├── video_names.csv
 ├── user_ret/
 ├── user_switch_prob/
 └── view_duration/
 ```
 
-## Dataset Generation
-
-`generate_dataset_2s.py` creates a sampled dataset from the available video/user-retention data.
-
-The script uses a fixed random seed and creates a dataset containing **100 videos**.
-
-Run:
-
-```bash
-cd algorithms/data
-python generate_dataset_2s.py
-```
-
-It generates dataset files under:
-
-```text
-dataset/
-├── video_names.csv
-├── user_ret/
-├── user_switch_prob/
-├── view_duration/
-└── sample_user/
-```
+---
 
 ## User Viewing-Duration Sampling
 
-`sample_user_by_KuaiRand_view_time.py` samples user playback durations according to specified viewing-time intervals from data extract from KuaiRand-27K.
+`sample_user_by_KuaiRand_view_time.py` samples user viewing durations within a specified interval.
 
 Run:
 
@@ -325,45 +276,59 @@ For example:
 python sample_user_by_KuaiRand_view_time.py 12 0
 ```
 
-The script is designed to generate sampled user playback-duration data for experiments with different viewing-time ranges.
+---
 
-## Network Trace Sampling
+## Video Duration and Viewing-Behavior Analysis
 
-`network_traces/sample_network_traces.py` contains code for sampling network traces from the source trace:
+`algorithms/get_video_duration_video_ret.ipynb` analyzes video duration and viewing behavior.
+
+The notebook depends on the corresponding prepared input data.
+
+---
+
+## Network Trace Preparation
+
+`algorithms/data/network_traces/sample_network_traces.py` contains code for processing and sampling the source 4G network trace:
 
 ```text
 NewFile-HighDensity-4G.txt
 ```
 
-The script converts the source trace values into Mbps and can generate sampled trace files for experiments.
+The script reads the original trace values and contains code for extracting fixed-length traces and converting the values to Mbps. 
+
+---
+
+## Network-Trace Analysis
+
+`algorithms/data/analyze_network_trace.py` analyzes the prepared network traces.
 
 ---
 
 # Performance Metrics
 
-The simulator and algorithm implementations record several streaming performance metrics, including:
+The simulator and algorithm implementations use several streaming-related metrics, including:
 
 - **QoE**
 - **Average video quality / bitrate**
-- **Quality smoothness**
+- **Quality variation**
 - **Rebuffering**
 - **Bandwidth usage**
 - **Bandwidth waste**
 - **Viewing duration**
 - **Downloaded and viewed video chunks**
 
-The QoE calculation uses the parameters defined in `config_algorithm.py`
+The bitrate levels and QoE-related parameters are defined in `config_algorithm.py`.
 
 ---
 
 # Result Analysis
 
-The repository contains scripts and Jupyter notebooks for analyzing experimental results.
+The repository contains Jupyter notebooks and auxiliary scripts for analyzing the prepared data and experimental results.
 
 ## Measurement Analysis
 
-- `algorithms/plot_mesurement_study.ipynb`: Measurement-study visualization.
-- `algorithms/analyze_network.ipynb`: Network-trace analysis.
+- `algorithms/plot_mesurement_study.ipynb`: Visualization for the measurement study.
+- `algorithms/analyze_network.ipynb`: Analysis of network traces.
 - `algorithms/get_video_duration_video_ret.ipynb`: Analysis of video duration and viewing behavior.
 
 ---
@@ -372,20 +337,9 @@ The repository contains scripts and Jupyter notebooks for analyzing experimental
 
 ## Requirements
 
-The repository provides the following Python dependencies in `requirements.txt`:
+The repository provides the following dependencies in `requirements.txt`:
 
-```text
-numpy==1.24.4
-torch==2.4.1
-gym==0.26
-matplotlib
-tensorboard==2.14.0
-scipy==1.10.1
-```
-
-A Python environment compatible with these dependencies is recommended.
-
-## Install Dependencies
+Install them with:
 
 ```bash
 pip install -r requirements.txt
@@ -393,3 +347,15 @@ pip install -r requirements.txt
 
 ---
 
+# Data Availability
+
+The repository does **not** contain all data and model files required to reproduce every experiment.
+
+In particular, the following resources are referenced by the code but are not included in the repository:
+
+- KuaiRand-27K source data.
+- The original `NewFile-HighDensity-4G.txt` network trace.
+
+Prepare these resources according to the paths expected by the corresponding scripts before running the experiments.
+
+---
